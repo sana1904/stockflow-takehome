@@ -31,3 +31,34 @@
 - Wrap operations in a single database transaction
 - Validate input data
 - Use decimal types for price
+
+from decimal import Decimal
+from sqlalchemy.exc import IntegrityError
+
+def create_product():
+    data = request.get_json()
+
+    try:
+        with db.session.begin():
+            # Product should not be tied to a single warehouse
+            product = Product(
+                name=data["name"],
+                sku=data["sku"],
+                price=Decimal(str(data["price"]))
+            )
+            db.session.add(product)
+            db.session.flush()  # ensures product.id is available
+
+            # Inventory represents product + warehouse relationship
+            inventory = Inventory(
+                product_id=product.id,
+                warehouse_id=data["warehouse_id"],
+                quantity=data.get("initial_quantity", 0)
+            )
+            db.session.add(inventory)
+
+        return {"message": "Product created", "product_id": product.id}, 201
+
+    except IntegrityError:
+        db.session.rollback()
+        return {"error": "SKU already exists"}, 400
